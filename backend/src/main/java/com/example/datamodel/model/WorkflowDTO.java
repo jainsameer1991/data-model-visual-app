@@ -16,4 +16,26 @@ public class WorkflowDTO {
 
     public String getData() { return data; }
     public void setData(String data) { this.data = data; }
+
+    // --- New Models ---
+    public static class Edge {
+        public String id;
+        public String source;
+        public String target;
+        public String label;
+        public RequestModel requestModel;
+        public ResponseModel responseModel;
+    }
+
+    public static class RequestModel {
+        public String id;
+        public String name;
+        public String json; // JSON string
+    }
+
+    public static class ResponseModel {
+        public String id;
+        public String name;
+        public String json; // JSON string
+    }
 } 
