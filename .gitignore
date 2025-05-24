@@ -1,1 +1,27 @@
-backend/target/ 
+# Backend build artifacts
+backend/target/
+
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Mac system files
+.DS_Store
+
+# Vite/React build output
+frontend/dist/
+
+# IDE/project files
+.idea/
+.vscode/
+*.iml
+
+# Environment/config files
+.env
+.env.*
+
+# Log files
+*.log
+
+# Local dev files
+*.local 
