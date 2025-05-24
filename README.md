@@ -1,22 +1,79 @@
 # Data Model Visual App
 
 ## Overview
-This project aims to build an app similar to [draw.io](https://draw.io), offering powerful visual diagram editing. It also takes inspiration from [swimlanes.io](https://swimlanes.io), where users can create sequence diagrams by writing markdown-like text. Our app combines both approaches, integrating a powerful AI assistant that allows users to either edit diagrams visually or describe their intentions in natural language or markdown-style text to generate and modify diagrams.
+This project is a modern diagramming tool inspired by [draw.io](https://draw.io) and [swimlanes.io](https://swimlanes.io), with a unique AI assistant. Users can visually create/edit diagrams or describe their intentions in text, and the AI will update the diagram accordingly.
 
 ## Key Features
-- **Diagram Editing:** Users can create and edit diagrams visually, just like in draw.io.
-- **AI Chat Assistant:** Users can describe their intentions or diagram changes in natural language (text messages), and the AI will help generate, modify, or explain diagram elements.
-- **Markdown/Text-Based Diagrams:** Inspired by swimlanes.io, users can write markdown-like text to quickly create sequence diagrams or other diagram types.
-- **Hybrid Workflow:** Users can freely switch between manual editing and AI-driven or text-based commands, making diagramming faster and more intuitive.
+- **Visual Diagram Editing:** Drag-and-drop nodes, connect them with edges, and edit node/edge properties.
+- **AI Chat Assistant:** Describe your intentions in natural language; the AI interprets and updates the diagram.
+- **Advanced Edge Modeling:** Each edge can have a request and response model (name + editable JSON), with a floating editor for easy editing.
+- **Manual JSON Actions:** Use a modal to input or test JSON actions directly, with syntax overview and examples.
+- **Workflow Save/Load:** Save your diagram as a workflow (JSON), load existing workflows, and auto-save progress.
+- **Hybrid Workflow:** Freely switch between manual editing, AI-driven, or JSON-based commands.
 
-## Example Use Case
-- A user starts drawing a flowchart.
-- Instead of manually adding every element, the user types:
-  > “Add a swimlane for the QA team and connect it to the deployment process.”
-- Or, the user writes markdown-like text to define a sequence diagram.
-- The AI assistant interprets the message or markdown and updates the diagram accordingly.
+## Tech Stack
+- **Frontend:** React (Vite), React Flow, Material UI
+- **Backend:** Spring Boot (Java), OpenAI API integration
 
-This approach combines the flexibility of manual diagramming with the speed and intelligence of AI-driven and text-based design.
+## Setup & Usage
+1. **Clone the repository:**
+   ```sh
+   git clone <repo-url>
+   cd data-model-visual-app
+   ```
+2. **Install frontend dependencies:**
+   ```sh
+   cd frontend
+   npm install
+   ```
+3. **Start the backend:**
+   ```sh
+   cd ../backend
+   mvn spring-boot:run
+   ```
+4. **Start the frontend:**
+   ```sh
+   cd ../frontend
+   npm run dev
+   ```
+5. **Open the app:**
+   Visit [http://localhost:5173/](http://localhost:5173/) in your browser.
+
+## Notes
+- **Do not push build artifacts:** The `backend/target/` directory is ignored via `.gitignore` and should not be committed.
+- **AI API Key:** To use the AI assistant, set your OpenAI API key in the backend as required.
+
+## Example: Advanced Edge JSON
+```json
+{
+  "actions": [
+    {
+      "type": "add_node",
+      "label": "UserService",
+      "componentType": "Service"
+    },
+    {
+      "type": "add_node",
+      "label": "Async-Orchestrator",
+      "componentType": "Service"
+    },
+    {
+      "type": "add_edge",
+      "source": "Async-Orchestrator",
+      "target": "UserService",
+      "label": "user-details",
+      "requestModel": {
+        "name": "UserRequest",
+        "json": { "userId": "string" }
+      },
+      "responseModel": {
+        "name": "UserResponse",
+        "json": { "user": { "id": "string", "name": "string" } }
+      }
+    }
+  ]
+}
+```
 
 ---
 For more details or to contribute, see the code and documentation in this repository. 
