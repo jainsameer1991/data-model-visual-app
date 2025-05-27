@@ -23,6 +23,10 @@ import ChatIcon from '@mui/icons-material/Chat';
 import SendIcon from '@mui/icons-material/Send';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import Popover from '@mui/material/Popover';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import Tooltip from '@mui/material/Tooltip';
+import Snackbar from '@mui/material/Snackbar';
 
 let id = 0;
 const getId = () => `node_${id++}`;
@@ -56,6 +60,7 @@ const COMPONENTS = [
   { type: 'MongoDB', label: 'MongoDB', icon: <StorageIcon /> },
   { type: 'S3', label: 'S3', icon: <CloudQueueIcon /> },
   { type: 'REST API', label: 'REST API', icon: <ApiIcon /> },
+  { type: 'Client', label: 'Client', icon: <AccountCircleIcon /> },
 ];
 
 function getIconForType(type) {
@@ -140,11 +145,21 @@ function ChatPanel({ open, onClose, chatMessages, chatInput, setChatInput, onSen
 const NodeWithUpload = ({ data }) => {
   const [editMode, setEditMode] = useState(false);
   const [tempName, setTempName] = useState(data.label);
+  const [descDialogOpen, setDescDialogOpen] = useState(false);
+  const [descDraft, setDescDraft] = useState(data.description || '');
+
+  useEffect(() => {
+    setDescDraft(data.description || '');
+  }, [data.description]);
 
   const handleEdit = () => setEditMode(true);
   const handleSave = () => {
     data.onNameChange(data.id, tempName);
     setEditMode(false);
+  };
+  const handleDescSave = () => {
+    data.onDescriptionChange(data.id, descDraft);
+    setDescDialogOpen(false);
   };
 
   return (
@@ -165,37 +180,97 @@ const NodeWithUpload = ({ data }) => {
           <span>{data.label}</span>
         )}
         <IconButton size="small" onClick={handleEdit}><EditIcon fontSize="small" /></IconButton>
+        {/* Info icon with tooltip if description exists */}
+        {data.description && data.description.trim() ? (
+          <Tooltip title={data.description} placement="top">
+            <IconButton size="small" onClick={() => setDescDialogOpen(true)}>
+              <InfoOutlinedIcon fontSize="small" color="info" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
       </Box>
-      <FileUpload nodeId={data.id} onFileUpload={data.onFileUpload} />
-      {data.fileName && <div style={{ fontSize: 12, marginTop: 4 }}>📄 {data.fileName}</div>}
+      {/* Add description link if no description */}
+      {!(data.description && data.description.trim()) && !editMode && (
+        <Button variant="text" size="small" sx={{ mt: 1, color: '#1976d2', textTransform: 'none' }} onClick={() => setDescDialogOpen(true)}>
+          Add description
+        </Button>
+      )}
+      {/* Description Edit Dialog */}
+      <Dialog open={descDialogOpen} onClose={() => setDescDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Edit Description</DialogTitle>
+        <DialogContent>
+          <TextField
+            value={descDraft}
+            onChange={e => setDescDraft(e.target.value)}
+            label="Description"
+            multiline
+            minRows={3}
+            maxRows={6}
+            fullWidth
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDescDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleDescSave}>Save</Button>
+        </DialogActions>
+      </Dialog>
+      {editMode && (
+        <Button onClick={handleSave} size="small" sx={{ mt: 1 }}>Save</Button>
+      )}
     </Box>
   );
 };
 
 const nodeTypes = { uploadNode: NodeWithUpload };
 
-function CustomEdge({ id, sourceX, sourceY, targetX, targetY, data, selected, label, onRequestClick, onResponseClick }) {
+function CustomEdge({ id, sourceX, sourceY, targetX, targetY, data, selected, label, onRequestClick, onResponseClick, onEditEdge }) {
   const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY });
+  // Tooltip content for edge info
+  const tooltipContent = (
+    <Box sx={{ minWidth: 220 }}>
+      <Typography variant="subtitle2" sx={{ color: 'inherit' }}>{label}</Typography>
+      {data?.requestModel?.name && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" color="inherit">Request Model:</Typography>
+          <Typography variant="body2" sx={{ color: 'inherit' }}>{data.requestModel.name}</Typography>
+          <Box component="pre" sx={{ fontSize: 12, m: 0, p: 0, color: 'inherit', background: 'none', border: 'none', boxShadow: 'none' }}>{JSON.stringify(data.requestModel.json, null, 2)}</Box>
+        </Box>
+      )}
+      {data?.responseModel?.name && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" color="inherit">Response Model:</Typography>
+          <Typography variant="body2" sx={{ color: 'inherit' }}>{data.responseModel.name}</Typography>
+          <Box component="pre" sx={{ fontSize: 12, m: 0, p: 0, color: 'inherit', background: 'none', border: 'none', boxShadow: 'none' }}>{JSON.stringify(data.responseModel.json, null, 2)}</Box>
+        </Box>
+      )}
+    </Box>
+  );
   return (
     <g>
       <path id={id} className="react-flow__edge-path" d={edgePath} markerEnd="url(#arrowclosed)" style={{ stroke: '#1976d2', strokeWidth: 2 }} />
-      {/* Edge label (name) */}
+      {/* Edge label (name) with info icon */}
       {label && (
-        <foreignObject x={labelX - 60} y={labelY - 20} width={120} height={24} style={{ pointerEvents: 'none' }}>
-          <Box sx={{ background: '#fff', border: '1px solid #888', borderRadius: 1, px: 1, fontSize: 13, color: '#333', textAlign: 'center', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {label}
+        <foreignObject x={labelX - 60} y={labelY - 20} width={180} height={32} style={{ pointerEvents: 'auto' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #888', borderRadius: 1, px: 1, fontSize: 13, color: '#333', textAlign: 'center', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <Tooltip title={tooltipContent} placement="top" arrow>
+              <IconButton size="small" sx={{ ml: 0.5 }} onClick={e => { e.stopPropagation(); onEditEdge && onEditEdge(); }}>
+                <InfoOutlinedIcon fontSize="small" color="info" />
+              </IconButton>
+            </Tooltip>
           </Box>
         </foreignObject>
       )}
-      {/* Only show request/response overlays if selected */}
-      {selected && data?.requestModel?.name && (
+      {/* Only show request/response overlays if selected and no label (first time) */}
+      {!label && selected && data?.requestModel?.name && (
         <foreignObject x={labelX - 60} y={labelY - 40} width={120} height={30} style={{ cursor: 'pointer' }}>
           <Box onClick={e => { e.stopPropagation(); onRequestClick && onRequestClick(); }} sx={{ background: '#fff', border: '1px solid #1976d2', borderRadius: 1, px: 1, fontSize: 12, color: '#1976d2', textAlign: 'center', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ':hover': { bgcolor: '#e3f2fd' } }}>
             {data.requestModel.name}
           </Box>
         </foreignObject>
       )}
-      {selected && data?.responseModel?.name && (
+      {!label && selected && data?.responseModel?.name && (
         <foreignObject x={labelX - 60} y={labelY + 10} width={120} height={30} style={{ cursor: 'pointer' }}>
           <Box onClick={e => { e.stopPropagation(); onResponseClick && onResponseClick(); }} sx={{ background: '#fff', border: '1px solid #388e3c', borderRadius: 1, px: 1, fontSize: 12, color: '#388e3c', textAlign: 'center', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ':hover': { bgcolor: '#e8f5e9' } }}>
             {data.responseModel.name}
@@ -212,7 +287,6 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedEdge, setSelectedEdge] = useState(null);
-  const [fileMap, setFileMap] = useState({});
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
   const [editWorkflowName, setEditWorkflowName] = useState(false);
   const [tempWorkflowName, setTempWorkflowName] = useState(workflowName);
@@ -234,17 +308,39 @@ export default function App() {
   const [jsonModal, setJsonModal] = useState({ open: false, title: '', json: {} });
   const [manualJson, setManualJson] = useState('');
   const [jsonError, setJsonError] = useState('');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '' });
   const sampleJsons = [
     `{
   "actions": [
-    { "type": "add_node", "label": "UserService", "componentType": "Service" },
-    { "type": "add_node", "label": "MyDesk", "componentType": "Service" },
-    { "type": "add_node", "label": "Async-Orchestrator", "componentType": "Service" },
+    { "type": "add_node", "label": "UserService", "componentType": "Service", "description": "Handles user data and authentication." },
+    { "type": "add_node", "label": "MyDesk", "componentType": "Service", "description": "Desk management service." },
+    { "type": "add_node", "label": "Async-Orchestrator", "componentType": "Service", "description": "Coordinates async flows." },
     { "type": "add_edge", "source": "Async-Orchestrator", "target": "UserService",
       "label": "user-details",
       "requestModel": { "name": "UserRequest", "json": { "userId": "string" } },
       "responseModel": { "name": "UserResponse", "json": { "user": { "id": "string", "name": "string" } } }
-    }
+    },
+    { "type": "add_edge", "source": "Async-Orchestrator", "target": "MyDesk",
+      "label": "ticket-details",
+      "requestModel": { "name": "TicketRequest", "json": { "ticketId": "string" } },
+      "responseModel": { "name": "TicketResponse", "json": { "ticket": { "id": "string", "desc": "string" } } }
+    },
+    { "type": "update_node_description", "label": "UserService", "description": "Updated: Handles all user-related operations." },
+    { "type": "update_edge_response_field", "label": "user-details", "path": ["user-description"], "value": "string" },
+    { "type": "update_edge_request_field", "label": "ticket-details", "path": ["ticketId"], "value": "number" }
+  ]
+}`,
+    `{
+  "actions": [
+    { "type": "add_node", "label": "Client", "componentType": "Client", "description": "External user or system." },
+    { "type": "add_node", "label": "API Gateway", "componentType": "REST API", "description": "Entry point for all API calls." },
+    { "type": "add_edge", "source": "Client", "target": "API Gateway",
+      "label": "api-call",
+      "requestModel": { "name": "ApiRequest", "json": { "endpoint": "string", "payload": {} } },
+      "responseModel": { "name": "ApiResponse", "json": { "status": "string", "data": {} } }
+    },
+    { "type": "update_node_description", "label": "API Gateway", "description": "Updated: Main entry point for APIs." },
+    { "type": "update_edge_response_field", "label": "api-call", "path": ["data", "user"], "value": { "id": "string", "name": "string" } }
   ]
 }`
   ];
@@ -331,30 +427,28 @@ export default function App() {
         data: {
           label: `Service ${nodes.length + 1}`,
           id: nodeId,
-          onFileUpload: handleFileUpload,
-          fileName: fileMap[nodeId]?.name || '',
           onNameChange: handleNodeNameChange,
+          onDescriptionChange: handleNodeDescriptionChange,
         },
       },
     ]);
   };
-
-  function handleFileUpload(nodeId, file) {
-    setFileMap((prev) => ({ ...prev, [nodeId]: file }));
-    setNodes((nds) =>
-      nds.map((node) =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, fileName: file.name } }
-          : node
-      )
-    );
-  }
 
   function handleNodeNameChange(nodeId, newName) {
     setNodes((nds) =>
       nds.map((node) =>
         node.id === nodeId
           ? { ...node, data: { ...node.data, label: newName } }
+          : node
+      )
+    );
+  }
+
+  function handleNodeDescriptionChange(nodeId, newDesc) {
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, description: newDesc } }
           : node
       )
     );
@@ -376,7 +470,6 @@ export default function App() {
       setNodes([]);
       setEdges([]);
       setWorkflowName('Untitled Workflow');
-      setFileMap({});
       setHasUnsavedChanges(false);
     }
   }
@@ -390,7 +483,6 @@ export default function App() {
       setWorkflowName(workflowName || name);
       setNodes(nodes || []);
       setEdges(edges || []);
-      setFileMap({});
       setLoadDialogOpen(false);
       setHasUnsavedChanges(false);
     } catch {
@@ -543,7 +635,6 @@ export default function App() {
         requestModel: e.requestModel || { name: '', json: {} },
         responseModel: e.responseModel || { name: '', json: {} },
       })));
-      setFileMap({});
       setFileHandle(null); // Not using File System Access API for uploads
       setLastSavedData(text);
       setHasUnsavedChanges(false);
@@ -577,9 +668,8 @@ export default function App() {
         data: {
           label: component.label,
           id: nodeId,
-          onFileUpload: handleFileUpload,
-          fileName: fileMap[nodeId]?.name || '',
           onNameChange: handleNodeNameChange,
+          onDescriptionChange: handleNodeDescriptionChange,
           componentType: component.type,
           icon: component.icon,
         },
@@ -609,10 +699,10 @@ export default function App() {
               position: { x: Math.random() * 250, y: Math.random() * 250 },
               data: {
                 label: action.label,
+                description: action.description || '',
                 id: nodeId,
-                onFileUpload: handleFileUpload,
-                fileName: '',
                 onNameChange: handleNodeNameChange,
+                onDescriptionChange: handleNodeDescriptionChange,
                 componentType: action.componentType,
                 icon: getIconForType(action.componentType),
               },
@@ -636,6 +726,37 @@ export default function App() {
               });
             }
           }
+        } else if (action.type === 'update_node_description') {
+          // Update node description by label
+          newNodes = newNodes.map(node =>
+            node.data.label === action.label ? { ...node, data: { ...node.data, description: action.description } } : node
+          );
+        } else if (action.type === 'update_edge_response_field') {
+          // Update edge response JSON by label and path
+          newEdges = newEdges.map(e => {
+            if (e.label !== action.label) return e;
+            let newJson = { ...e.responseModel?.json };
+            let obj = newJson;
+            for (let i = 0; i < action.path.length - 1; i++) {
+              if (!obj[action.path[i]]) obj[action.path[i]] = {};
+              obj = obj[action.path[i]];
+            }
+            obj[action.path[action.path.length - 1]] = action.value;
+            return { ...e, responseModel: { ...e.responseModel, json: newJson } };
+          });
+        } else if (action.type === 'update_edge_request_field') {
+          // Update edge request JSON by label and path
+          newEdges = newEdges.map(e => {
+            if (e.label !== action.label) return e;
+            let newJson = { ...e.requestModel?.json };
+            let obj = newJson;
+            for (let i = 0; i < action.path.length - 1; i++) {
+              if (!obj[action.path[i]]) obj[action.path[i]] = {};
+              obj = obj[action.path[i]];
+            }
+            obj[action.path[action.path.length - 1]] = action.value;
+            return { ...e, requestModel: { ...e.requestModel, json: newJson } };
+          });
         }
       });
       setNodes(newNodes);
@@ -676,6 +797,126 @@ export default function App() {
       setChatLoading(false);
     }
   };
+
+  // Utility functions for node/edge creation and editing
+  function createNode({ label, description = '', componentType = 'Service' }) {
+    const nodeId = getId();
+    setNodes(nds => [
+      ...nds,
+      {
+        id: nodeId,
+        type: 'uploadNode',
+        position: { x: Math.random() * 250, y: Math.random() * 250 },
+        data: {
+          label,
+          description,
+          id: nodeId,
+          onNameChange: handleNodeNameChange,
+          onDescriptionChange: handleNodeDescriptionChange,
+          componentType,
+          icon: getIconForType(componentType),
+        },
+      },
+    ]);
+  }
+  function editNode({ id, label, description }) {
+    setNodes(nds => nds.map(node =>
+      node.id === id ? { ...node, data: { ...node.data, label: label ?? node.data.label, description: description ?? node.data.description } } : node
+    ));
+  }
+  function createEdge({ sourceLabel, targetLabel, label = '', requestModel = { name: '', json: {} }, responseModel = { name: '', json: {} } }) {
+    let labelToId = {};
+    nodes.forEach(n => { labelToId[n.data.label] = n.id; });
+    const sourceId = labelToId[sourceLabel];
+    const targetId = labelToId[targetLabel];
+    if (sourceId && targetId) {
+      setEdges(eds => [
+        ...eds,
+        {
+          id: `e_${sourceId}_${targetId}_${Math.random().toString(36).slice(2,8)}`,
+          source: sourceId,
+          target: targetId,
+          type: 'default',
+          markerEnd: 'arrowclosed',
+          style: { stroke: '#1976d2', strokeWidth: 2 },
+          label,
+          requestModel,
+          responseModel,
+        },
+      ]);
+    }
+  }
+  function editEdge({ id, label, requestModel, responseModel }) {
+    setEdges(eds => eds.map(e =>
+      e.id === id ? { ...e, label: label ?? e.label, requestModel: requestModel ?? e.requestModel, responseModel: responseModel ?? e.responseModel } : e
+    ));
+  }
+  function updateNodeDescription({ label, description }) {
+    setNodes(nds => nds.map(node =>
+      node.data.label === label ? { ...node, data: { ...node.data, description } } : node
+    ));
+  }
+  function updateEdgeResponseField({ label, path, value }) {
+    setEdges(eds => eds.map(e => {
+      if (e.label !== label) return e;
+      let newJson = { ...e.responseModel?.json };
+      let obj = newJson;
+      for (let i = 0; i < path.length - 1; i++) {
+        if (!obj[path[i]]) obj[path[i]] = {};
+        obj = obj[path[i]];
+      }
+      obj[path[path.length - 1]] = value;
+      return { ...e, responseModel: { ...e.responseModel, json: newJson } };
+    }));
+  }
+  function updateEdgeRequestField({ label, path, value }) {
+    setEdges(eds => eds.map(e => {
+      if (e.label !== label) return e;
+      let newJson = { ...e.requestModel?.json };
+      let obj = newJson;
+      for (let i = 0; i < path.length - 1; i++) {
+        if (!obj[path[i]]) obj[path[i]] = {};
+        obj = obj[path[i]];
+      }
+      obj[path[path.length - 1]] = value;
+      return { ...e, requestModel: { ...e.requestModel, json: newJson } };
+    }));
+  }
+  // Expose to window for console testing
+  window.createNode = createNode;
+  window.editNode = editNode;
+  window.createEdge = createEdge;
+  window.editEdge = editEdge;
+  window.updateNodeDescription = updateNodeDescription;
+  window.updateEdgeResponseField = updateEdgeResponseField;
+  window.updateEdgeRequestField = updateEdgeRequestField;
+
+  function handleCopyWorkflowJson() {
+    // Map node IDs to labels
+    const idToLabel = {};
+    nodes.forEach(n => { idToLabel[n.id] = n.data.label; });
+    // Actions for nodes
+    const nodeActions = nodes.map(n => ({
+      type: 'add_node',
+      label: n.data.label,
+      componentType: n.data.componentType || 'Service',
+      description: n.data.description || '',
+    }));
+    // Actions for edges
+    const edgeActions = edges.map(e => ({
+      type: 'add_edge',
+      source: idToLabel[e.source] || e.source,
+      target: idToLabel[e.target] || e.target,
+      label: e.label || '',
+      requestModel: e.requestModel || { name: '', json: {} },
+      responseModel: e.responseModel || { name: '', json: {} },
+    }));
+    // (Optional) You can add update actions here if you want to support incremental updates
+    const actions = [...nodeActions, ...edgeActions];
+    const actionsJson = JSON.stringify({ actions }, null, 2);
+    navigator.clipboard.writeText(actionsJson);
+    setSnackbar({ open: true, message: 'Workflow actions JSON copied to clipboard!' });
+  }
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', width: '100vw', background: '#f0f2f5' }}>
@@ -731,6 +972,7 @@ export default function App() {
           >
             Syntax Overview / Manual JSON
           </Button>
+          <Button variant="outlined" color="success" onClick={handleCopyWorkflowJson}>Copy Workflow JSON</Button>
         </Box>
         <div id="reactflow-canvas" ref={drop} style={{ height: '85vh', width: '100%' }}>
           <ReactFlow
@@ -747,6 +989,7 @@ export default function App() {
               selected: selectedEdge === e.id,
               onRequestClick: () => setJsonModal({ open: true, title: e.requestModel?.name || 'Request Model', json: e.requestModel?.json || {} }),
               onResponseClick: () => setJsonModal({ open: true, title: e.responseModel?.name || 'Response Model', json: e.responseModel?.json || {} }),
+              onEditEdge: () => setSelectedEdge(e.id),
             }))}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -833,7 +1076,6 @@ export default function App() {
               setNodes([]);
               setEdges([]);
               setWorkflowName('Untitled Workflow');
-              setFileMap({});
               setHasUnsavedChanges(false);
             }}>Discard</Button>
           </DialogActions>
@@ -901,6 +1143,12 @@ export default function App() {
         setChatInput={setChatInput}
         onSend={handleSendChat}
         loading={chatLoading}
+      />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={2000}
+        onClose={() => setSnackbar({ open: false, message: '' })}
+        message={snackbar.message}
       />
     </Box>
   );
