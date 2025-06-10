@@ -84,7 +84,7 @@ function PaletteItem({ component }) {
 
 function Palette() {
   return (
-    <Box sx={{ width: 160, background: '#f7f7f7', p: 1, height: '100vh', overflowY: 'auto', borderRight: '1px solid #eee' }}>
+    <Box sx={{ width: 180, background: '#f7f7f7', p: 1, height: '100vh', overflowY: 'auto', borderRight: '1px solid #eee', boxSizing: 'border-box', flexShrink: 0 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>Palette</Typography>
       {COMPONENTS.map((c) => <PaletteItem key={c.type} component={c} />)}
     </Box>
@@ -142,11 +142,59 @@ function ChatPanel({ open, onClose, chatMessages, chatInput, setChatInput, onSen
   );
 }
 
+// Add a list of stateful component types
+const STATEFUL_COMPONENTS = ['Kafka', 'MySQL', 'MongoDB', 'Redis'];
+
+// Data Model Editor Modal
+function DataModelEditor({ open, value, onChange, onClose }) {
+  const [jsonStr, setJsonStr] = useState(JSON.stringify(value || {}, null, 2));
+  const [error, setError] = useState('');
+  useEffect(() => {
+    setJsonStr(JSON.stringify(value || {}, null, 2));
+    setError('');
+  }, [value, open]);
+  const handleSave = () => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      onChange(parsed);
+      onClose();
+    } catch (e) {
+      setError('Invalid JSON');
+    }
+  };
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Data Model</DialogTitle>
+      <DialogContent>
+        <TextField
+          label="Data Model (JSON)"
+          value={jsonStr}
+          onChange={e => setJsonStr(e.target.value)}
+          multiline
+          minRows={8}
+          maxRows={20}
+          fullWidth
+          autoFocus
+          error={!!error}
+          helperText={error}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave}>Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// Modified NodeWithUpload to support inner data model box
 const NodeWithUpload = ({ data }) => {
   const [editMode, setEditMode] = useState(false);
   const [tempName, setTempName] = useState(data.label);
   const [descDialogOpen, setDescDialogOpen] = useState(false);
   const [descDraft, setDescDraft] = useState(data.description || '');
+  const [dataModelDialogOpen, setDataModelDialogOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     setDescDraft(data.description || '');
@@ -161,7 +209,12 @@ const NodeWithUpload = ({ data }) => {
     data.onDescriptionChange(data.id, descDraft);
     setDescDialogOpen(false);
   };
-
+  // Data model handlers
+  const handleDataModelSave = (model) => {
+    if (data.onDataModelChange) data.onDataModelChange(data.id, model);
+  };
+  // Check if this node is stateful
+  const isStateful = STATEFUL_COMPONENTS.includes(data.componentType);
   return (
     <Box sx={{ p: 1, background: '#fff', borderRadius: 1, minWidth: 120, textAlign: 'center', boxShadow: 1, position: 'relative' }}>
       <Handle type="target" position="left" style={{ background: '#1976d2' }} />
@@ -218,6 +271,39 @@ const NodeWithUpload = ({ data }) => {
       {editMode && (
         <Button onClick={handleSave} size="small" sx={{ mt: 1 }}>Save</Button>
       )}
+      {/* Inner data model box for stateful components */}
+      {isStateful && (
+        <Tooltip
+          title={
+            data.dataModel && Object.keys(data.dataModel).length > 0
+              ? <Box component="pre" sx={{ fontSize: 12, m: 0, p: 0, color: 'inherit', background: 'none', border: 'none', boxShadow: 'none' }}>{JSON.stringify(data.dataModel, null, 2)}</Box>
+              : 'Click to define data model'
+          }
+          placement="bottom"
+          arrow
+          open={hovered}
+          onOpen={() => setHovered(true)}
+          onClose={() => setHovered(false)}
+        >
+          <Box
+            sx={{ mt: 1, p: 1, background: '#f5f5f5', border: '1px dashed #888', borderRadius: 1, fontSize: 12, cursor: 'pointer', minWidth: 80, mx: 'auto' }}
+            onClick={e => { e.stopPropagation(); setDataModelDialogOpen(true); }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          >
+            Data Model
+          </Box>
+        </Tooltip>
+      )}
+      {/* Data Model Editor Dialog */}
+      {isStateful && (
+        <DataModelEditor
+          open={dataModelDialogOpen}
+          value={data.dataModel}
+          onChange={handleDataModelSave}
+          onClose={() => setDataModelDialogOpen(false)}
+        />
+      )}
     </Box>
   );
 };
@@ -246,14 +332,18 @@ function CustomEdge({ id, sourceX, sourceY, targetX, targetY, data, selected, la
       )}
     </Box>
   );
+  // Compose label with sequenceNo if present
+  const displayLabel = (data?.sequenceNo !== undefined && data?.sequenceNo !== null && data?.sequenceNo !== '')
+    ? `${data.sequenceNo}. ${label}`
+    : label;
   return (
     <g>
       <path id={id} className="react-flow__edge-path" d={edgePath} markerEnd="url(#arrowclosed)" style={{ stroke: '#1976d2', strokeWidth: 2 }} />
       {/* Edge label (name) with info icon */}
-      {label && (
+      {displayLabel && (
         <foreignObject x={labelX - 60} y={labelY - 20} width={180} height={32} style={{ pointerEvents: 'auto' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #888', borderRadius: 1, px: 1, fontSize: 13, color: '#333', textAlign: 'center', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLabel}</span>
             <Tooltip title={tooltipContent} placement="top" arrow>
               <IconButton size="small" sx={{ ml: 0.5 }} onClick={e => { e.stopPropagation(); onEditEdge && onEditEdge(); }}>
                 <InfoOutlinedIcon fontSize="small" color="info" />
@@ -435,12 +525,31 @@ export default function App() {
   };
 
   function handleNodeNameChange(nodeId, newName) {
+    // Check if newName matches a palette component (case-insensitive)
+    const paletteComp = COMPONENTS.find(c => c.label.toLowerCase() === newName.trim().toLowerCase());
     setNodes((nds) =>
-      nds.map((node) =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, label: newName } }
-          : node
-      )
+      nds.map((node) => {
+        if (node.id !== nodeId) return node;
+        if (paletteComp) {
+          // Update to palette component type, icon, and stateful properties
+          const isStateful = STATEFUL_COMPONENTS.includes(paletteComp.type);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: paletteComp.label,
+              componentType: paletteComp.type,
+              icon: paletteComp.icon,
+              hasDataModelBox: isStateful,
+              onDataModelChange: handleNodeDataModelChange,
+              dataModel: isStateful ? (node.data.dataModel || {}) : undefined,
+            },
+          };
+        } else {
+          // Just update the label
+          return { ...node, data: { ...node.data, label: newName } };
+        }
+      })
     );
   }
 
@@ -492,13 +601,17 @@ export default function App() {
 
   async function handleSaveWorkflow() {
     // Strip icon property from each node before saving
-    const nodesToSave = nodes.map(node => ({
-      ...node,
-      data: {
-        ...node.data,
-        icon: undefined // Remove icon
-      }
-    }));
+    const nodesToSave = nodes.map(node => {
+      const isStateful = STATEFUL_COMPONENTS.includes(node.data.componentType);
+      // Build data object, omitting dataModel for non-stateful nodes
+      const { dataModel, ...restData } = node.data;
+      return {
+        ...node,
+        data: isStateful
+          ? { ...restData, dataModel: dataModel || {} }
+          : { ...restData },
+      };
+    });
     // Save edges with request/response models
     const edgesToSave = edges.map(e => ({
       ...e,
@@ -620,14 +733,22 @@ export default function App() {
     try {
       const { nodes, edges, workflowName } = JSON.parse(text);
       setWorkflowName(workflowName || file.name.replace(/\.json$/, ''));
-      // Rehydrate icon property for each node
-      const hydratedNodes = (nodes || []).map(node => ({
-        ...node,
-        data: {
-          ...node.data,
-          icon: getIconForType(node.data.componentType)
-        }
-      }));
+      // Rehydrate icon property for each node and ensure stateful node props
+      const hydratedNodes = (nodes || []).map(node => {
+        const isStateful = STATEFUL_COMPONENTS.includes(node.data.componentType);
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            icon: getIconForType(node.data.componentType),
+            onNameChange: handleNodeNameChange,
+            onDescriptionChange: handleNodeDescriptionChange,
+            onDataModelChange: handleNodeDataModelChange,
+            hasDataModelBox: isStateful,
+            dataModel: isStateful ? (node.data.dataModel || {}) : undefined,
+          }
+        };
+      });
       setNodes(hydratedNodes);
       // Ensure edges have request/response model fields
       setEdges((edges || []).map(e => ({
@@ -670,8 +791,11 @@ export default function App() {
           id: nodeId,
           onNameChange: handleNodeNameChange,
           onDescriptionChange: handleNodeDescriptionChange,
+          onDataModelChange: handleNodeDataModelChange,
           componentType: component.type,
           icon: component.icon,
+          dataModel: {},
+          hasDataModelBox: STATEFUL_COMPONENTS.includes(component.type),
         },
       },
     ]);
@@ -705,6 +829,8 @@ export default function App() {
                 onDescriptionChange: handleNodeDescriptionChange,
                 componentType: action.componentType,
                 icon: getIconForType(action.componentType),
+                onDataModelChange: handleNodeDataModelChange,
+                hasDataModelBox: STATEFUL_COMPONENTS.includes(action.componentType),
               },
             });
           }
@@ -723,6 +849,7 @@ export default function App() {
                 label: action.label || '',
                 requestModel: action.requestModel || { name: '', json: {} },
                 responseModel: action.responseModel || { name: '', json: {} },
+                sequenceNo: action.sequenceNo,
               });
             }
           }
@@ -813,8 +940,11 @@ export default function App() {
           id: nodeId,
           onNameChange: handleNodeNameChange,
           onDescriptionChange: handleNodeDescriptionChange,
+          onDataModelChange: handleNodeDataModelChange,
           componentType,
           icon: getIconForType(componentType),
+          dataModel: {},
+          hasDataModelBox: STATEFUL_COMPONENTS.includes(componentType),
         },
       },
     ]);
@@ -824,7 +954,7 @@ export default function App() {
       node.id === id ? { ...node, data: { ...node.data, label: label ?? node.data.label, description: description ?? node.data.description } } : node
     ));
   }
-  function createEdge({ sourceLabel, targetLabel, label = '', requestModel = { name: '', json: {} }, responseModel = { name: '', json: {} } }) {
+  function createEdge({ sourceLabel, targetLabel, label = '', requestModel = { name: '', json: {} }, responseModel = { name: '', json: {} }, sequenceNo }) {
     let labelToId = {};
     nodes.forEach(n => { labelToId[n.data.label] = n.id; });
     const sourceId = labelToId[sourceLabel];
@@ -842,13 +972,14 @@ export default function App() {
           label,
           requestModel,
           responseModel,
+          sequenceNo,
         },
       ]);
     }
   }
-  function editEdge({ id, label, requestModel, responseModel }) {
+  function editEdge({ id, label, requestModel, responseModel, sequenceNo }) {
     setEdges(eds => eds.map(e =>
-      e.id === id ? { ...e, label: label ?? e.label, requestModel: requestModel ?? e.requestModel, responseModel: responseModel ?? e.responseModel } : e
+      e.id === id ? { ...e, label: label ?? e.label, requestModel: requestModel ?? e.requestModel, responseModel: responseModel ?? e.responseModel, sequenceNo: sequenceNo ?? e.sequenceNo } : e
     ));
   }
   function updateNodeDescription({ label, description }) {
@@ -910,12 +1041,19 @@ export default function App() {
       label: e.label || '',
       requestModel: e.requestModel || { name: '', json: {} },
       responseModel: e.responseModel || { name: '', json: {} },
+      ...(e.sequenceNo !== undefined ? { sequenceNo: e.sequenceNo } : {})
     }));
     // (Optional) You can add update actions here if you want to support incremental updates
     const actions = [...nodeActions, ...edgeActions];
     const actionsJson = JSON.stringify({ actions }, null, 2);
     navigator.clipboard.writeText(actionsJson);
     setSnackbar({ open: true, message: 'Workflow actions JSON copied to clipboard!' });
+  }
+
+  function handleNodeDataModelChange(nodeId, newModel) {
+    setNodes(nds => nds.map(node =>
+      node.id === nodeId ? { ...node, data: { ...node.data, dataModel: newModel } } : node
+    ));
   }
 
   return (
@@ -941,7 +1079,7 @@ export default function App() {
             </>
           )}
           <Button variant="outlined" onClick={handleNewWorkflow}>New Workflow</Button>
-          <Button variant="contained" onClick={handleSaveWorkflow}>Save Workflow</Button>
+          <Button variant="contained" onClick={() => { setSaveDialogOpen(true); setSaveAsName(workflowName); }}>Save Workflow</Button>
           <Button variant="contained" onClick={handleAddNode}>Add Service Node</Button>
           <input
             type="file"
@@ -984,6 +1122,7 @@ export default function App() {
                 ...e.data,
                 requestModel: e.requestModel,
                 responseModel: e.responseModel,
+                sequenceNo: e.sequenceNo,
               },
               label: e.label,
               selected: selectedEdge === e.id,
@@ -1161,6 +1300,7 @@ function EdgeModelEditor({ edge, onSave, onClose }) {
   const [responseName, setResponseName] = useState(edge?.responseModel?.name || '');
   const [responseJsonStr, setResponseJsonStr] = useState(JSON.stringify(edge?.responseModel?.json || {}, null, 2));
   const [edgeLabel, setEdgeLabel] = useState(edge?.label || '');
+  const [sequenceNo, setSequenceNo] = useState(edge?.sequenceNo || '');
   const [jsonError, setJsonError] = useState('');
   useEffect(() => {
     if (edge) {
@@ -1169,6 +1309,7 @@ function EdgeModelEditor({ edge, onSave, onClose }) {
       setResponseName(edge.responseModel?.name || '');
       setResponseJsonStr(JSON.stringify(edge.responseModel?.json || {}, null, 2));
       setEdgeLabel(edge.label || '');
+      setSequenceNo(edge.sequenceNo || '');
       setAnchorEl(document.getElementById('reactflow-canvas'));
       setJsonError('');
     } else {
@@ -1234,6 +1375,13 @@ function EdgeModelEditor({ edge, onSave, onClose }) {
         error={!!jsonError}
         helperText={jsonError && 'Invalid response JSON'}
       />
+      <TextField
+        label="Sequence No (optional)"
+        value={sequenceNo}
+        onChange={e => setSequenceNo(e.target.value.replace(/[^0-9]/g, ''))}
+        fullWidth
+        sx={{ mb: 1 }}
+      />
       <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" onClick={() => {
@@ -1256,6 +1404,7 @@ function EdgeModelEditor({ edge, onSave, onClose }) {
             label: edgeLabel,
             requestModel: { name: requestName, json: req },
             responseModel: { name: responseName, json: res },
+            sequenceNo: sequenceNo ? Number(sequenceNo) : undefined,
           });
         }}>Save</Button>
       </Box>

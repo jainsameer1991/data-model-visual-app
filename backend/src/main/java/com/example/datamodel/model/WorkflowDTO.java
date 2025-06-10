@@ -25,6 +25,7 @@ public class WorkflowDTO {
         public String label;
         public RequestModel requestModel;
         public ResponseModel responseModel;
+        public Integer sequenceNo; // Optional sequence number
     }
 
     public static class RequestModel {
