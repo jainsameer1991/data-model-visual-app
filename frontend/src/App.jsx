@@ -599,11 +599,23 @@ export default function App() {
     }
   }
 
-  async function handleSaveWorkflow() {
+  // Save workflow logic
+  async function handleSaveWorkflow(forceDialog = false) {
+    // If workflow is new or Save As is requested, show dialog
+    if (workflowName === 'Untitled Workflow' || forceDialog) {
+      setSaveDialogOpen(true);
+      setSaveAsName(workflowName);
+      return;
+    }
+    // Otherwise, save directly (overwrite existing)
+    await doSaveWorkflow(workflowName);
+  }
+
+  // Actual save implementation
+  async function doSaveWorkflow(name) {
     // Strip icon property from each node before saving
     const nodesToSave = nodes.map(node => {
       const isStateful = STATEFUL_COMPONENTS.includes(node.data.componentType);
-      // Build data object, omitting dataModel for non-stateful nodes
       const { dataModel, ...restData } = node.data;
       return {
         ...node,
@@ -612,22 +624,21 @@ export default function App() {
           : { ...restData },
       };
     });
-    // Save edges with request/response models
     const edgesToSave = edges.map(e => ({
       ...e,
       requestModel: e.requestModel,
       responseModel: e.responseModel,
     }));
-    const data = JSON.stringify({ nodes: nodesToSave, edges: edgesToSave, workflowName }, null, 2);
-    if (fileHandle && window.showSaveFilePicker) {
-      // Use File System Access API
+    const data = JSON.stringify({ nodes: nodesToSave, edges: edgesToSave, workflowName: name }, null, 2);
+    if (fileHandle && window.showSaveFilePicker && workflowName !== 'Untitled Workflow') {
+      // Use File System Access API to overwrite
       try {
         const writable = await fileHandle.createWritable();
         await writable.write(data);
         await writable.close();
         setLastSavedData(data);
         setHasUnsavedChanges(false);
-        alert('Workflow auto-saved!');
+        setSnackbar({ open: true, message: 'Workflow auto-saved!' });
         return;
       } catch {
         alert('Failed to save workflow');
@@ -637,7 +648,7 @@ export default function App() {
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
-          suggestedName: workflowName + '.json',
+          suggestedName: name + '.json',
           types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
         });
         const writable = await handle.createWritable();
@@ -646,7 +657,7 @@ export default function App() {
         setFileHandle(handle);
         setLastSavedData(data);
         setHasUnsavedChanges(false);
-        alert('Workflow saved!');
+        setSnackbar({ open: true, message: 'Workflow saved!' });
         return;
       } catch {
         alert('Save cancelled or failed');
@@ -657,34 +668,24 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = (workflowName || 'workflow') + '.json';
+      a.download = (name || 'workflow') + '.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setLastSavedData(data);
       setHasUnsavedChanges(false);
-      alert('Workflow downloaded!');
+      setSnackbar({ open: true, message: 'Workflow downloaded!' });
     }
   }
 
-  // Auto-save on change if fileHandle is set and data changed
-  useEffect(() => {
-    if (!fileHandle || !window.showSaveFilePicker) return;
-    const data = JSON.stringify({ nodes, edges, workflowName }, null, 2);
-    if (lastSavedData && data !== lastSavedData) {
-      (async () => {
-        try {
-          const writable = await fileHandle.createWritable();
-          await writable.write(data);
-          await writable.close();
-          setLastSavedData(data);
-          setHasUnsavedChanges(false);
-        } catch {}
-      })();
-    }
-    // eslint-disable-next-line
-  }, [nodes, edges, workflowName]);
+  // Save dialog actions
+  function handleSaveDialogSave() {
+    // Update workflow name and close dialog, then save
+    setWorkflowName(saveAsName);
+    setSaveDialogOpen(false);
+    doSaveWorkflow(saveAsName);
+  }
 
   // Edge selection and deletion
   const onEdgeClick = useCallback((event, edge) => {
@@ -1079,7 +1080,7 @@ export default function App() {
             </>
           )}
           <Button variant="outlined" onClick={handleNewWorkflow}>New Workflow</Button>
-          <Button variant="contained" onClick={() => { setSaveDialogOpen(true); setSaveAsName(workflowName); }}>Save Workflow</Button>
+          <Button variant="contained" onClick={() => handleSaveWorkflow()}>Save Workflow</Button>
           <Button variant="contained" onClick={handleAddNode}>Add Service Node</Button>
           <input
             type="file"
@@ -1196,7 +1197,7 @@ export default function App() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveWorkflow} disabled={!saveAsName.trim()}>Save</Button>
+            <Button onClick={handleSaveDialogSave} disabled={!saveAsName.trim()}>Save</Button>
           </DialogActions>
         </Dialog>
         <Dialog open={showUnsavedDialog} onClose={() => setShowUnsavedDialog(false)}>
